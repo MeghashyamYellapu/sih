@@ -743,6 +743,54 @@
                     </div>
                 </div>
             </div>
+            
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-icon">
+                        <i class="fas fa-users"></i>
+                    </div>
+                    <h2 class="card-title">Entity Search</h2>
+                </div>
+                <div class="grid">
+                    <div class="form-group">
+                        <label for="searchProducerAddress">Producer Address</label>
+                        <div style="display: flex; gap: 10px;">
+                            <input type="text" id="searchProducerAddress" placeholder="0x...">
+                            <button class="btn" onclick="searchProducer()">
+                                <i class="fas fa-search"></i> Search
+                            </button>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="searchInspectorAddress">Quality Inspector Address</label>
+                        <div style="display: flex; gap: 10px;">
+                            <input type="text" id="searchInspectorAddress" placeholder="0x...">
+                            <button class="btn" onclick="searchInspector()">
+                                <i class="fas fa-search"></i> Search
+                            </button>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="searchDistributorAddress">Distributor Address</label>
+                        <div style="display: flex; gap: 10px;">
+                            <input type="text" id="searchDistributorAddress" placeholder="0x...">
+                            <button class="btn" onclick="searchDistributor()">
+                                <i class="fas fa-search"></i> Search
+                            </button>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="searchRetailerAddress">Retailer Address</label>
+                        <div style="display: flex; gap: 10px;">
+                            <input type="text" id="searchRetailerAddress" placeholder="0x...">
+                            <button class="btn" onclick="searchRetailer()">
+                                <i class="fas fa-search"></i> Search
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
             <div id="productsContainer">
                 <div class="empty-state">
                     <i class="fas fa-box-open"></i>
@@ -1008,7 +1056,7 @@
 
     <script>
         // Contract configuration
-        const CONTRACT_ADDRESS = '0x8464135c8F25Da09e49BC8782676a84730C318bC'; // Replace with your deployed contract address
+        const CONTRACT_ADDRESS = '0xD0927883Df1e10F36FdE44e6cd21ccA8Eaee7729'; // Replace with your deployed contract address
         const CONTRACT_ABI = [
             "function i_owner() view returns (address)",
             "function nextProductId() view returns (uint256)",
@@ -1018,6 +1066,7 @@
             "function isRetailerRegistered(address) view returns (bool)",
             "function createProduct(string calldata _name, string calldata _batchId, string calldata _category, uint256 _productionDate, string calldata _metadataURI) external returns (uint256)",
             "function getBasicProductInfo(uint256 productId) external view returns (uint256 id, string memory name, string memory batchId, string memory category, address producer, address currentOwner, bool qualityApproved)",
+            "function getFullProductDetails(uint256 productId) external view returns (uint256 id, string memory name, string memory batchId, string memory category, address producer, uint256 productionDate, uint256 expiryDate, address qualityInspector, bool qualityApproved, address distributor, address retailer, address currentOwner)",
             "function assignQualityInspector(uint256 productId, address inspector) external",
             "function addCertification(uint256 productId, string calldata certification) external",
             "function approveQuality(uint256 productId, uint256 expiryDate) external",
@@ -1029,10 +1078,18 @@
             "function registerDistributor(address _distributor, string calldata _details) external",
             "function registerRetailer(address _retailer, string calldata _details) external",
             "function getOwnershipHistory(uint256 productId) external view returns (address[] memory, uint256[] memory)",
+            "function getProducerDetails(address producer) view returns (string memory)",
+            "function getQualityInspectorDetails(address inspector) view returns (string memory)",
+            "function getDistributorDetails(address distributor) view returns (string memory)",
+            "function getRetailerDetails(address retailer) view returns (string memory)",
             "function producersList(uint256) view returns (address)",
             "function qualityInspectorsList(uint256) view returns (address)",
             "function distributorsList(uint256) view returns (address)",
-            "function retailersList(uint256) view returns (address)"
+            "function retailersList(uint256) view returns (address)",
+            "function totalProducers() view returns (uint256)",
+            "function totalQualityInspectors() view returns (uint256)",
+            "function totalDistributors() view returns (uint256)",
+            "function totalRetailers() view returns (uint256)"
         ];
 
         let provider;
@@ -1148,13 +1205,21 @@
                 document.getElementById('approvedProducts').textContent = approvedCount;
                 
                 // Get registered roles count
-                let rolesCount = 0;
+                let producersCount = 0;
+                let inspectorsCount = 0;
+                let distributorsCount = 0;
+                let retailersCount = 0;
+                
                 try {
-                    // This is a simplified approach - in a real app, you'd want to get the actual array lengths
-                    rolesCount = 4; // Assuming at least owner + 3 roles
+                    producersCount = await contract.totalProducers();
+                    inspectorsCount = await contract.totalQualityInspectors();
+                    distributorsCount = await contract.totalDistributors();
+                    retailersCount = await contract.totalRetailers();
                 } catch (error) {
                     console.log("Error getting roles count");
                 }
+                
+                const rolesCount = producersCount + inspectorsCount + distributorsCount + retailersCount;
                 document.getElementById('registeredRoles').textContent = rolesCount;
                 
                 // Get transfers count (simplified)
@@ -1256,9 +1321,19 @@
             }
         }
 
-        // Display product
-        function displayProduct(product) {
+        // Display product with enhanced details
+        async function displayProduct(product) {
             const container = document.getElementById('productsContainer');
+            
+            // Get full product details if available
+            let fullProductDetails = null;
+            try {
+                if (contract && product.id) {
+                    fullProductDetails = await contract.getFullProductDetails(product.id);
+                }
+            } catch (error) {
+                console.log("Error getting full product details:", error);
+            }
             
             // Format ownership history
             let timelineHTML = '';
@@ -1270,20 +1345,60 @@
                         : 'N/A';
                     
                     const isCurrent = i === product.ownersHistory.length - 1;
-                    const role = getRoleForAddress(owner);
+                    const role = await getRoleForAddress(owner);
                     
                     timelineHTML += `
                         <div class="timeline-item ${isCurrent ? 'current' : ''}">
                             <div class="timeline-title">
-                                <span>${role}</span>
+                                <span>${owner}</span>
                                 <span class="role-badge">${role}</span>
                             </div>
-                            <div>${owner.slice(0, 6)}...${owner.slice(-4)}</div>
                             <div class="timeline-date">${timestamp}</div>
                         </div>
                     `;
                 }
             }
+            
+            // Get role details if available
+            let producerDetails = '';
+            let inspectorDetails = '';
+            let distributorDetails = '';
+            let retailerDetails = '';
+            
+            try {
+                if (fullProductDetails && fullProductDetails[4]) { // producer
+                    if (await contract.isProducerRegistered(fullProductDetails[4])) {
+                        producerDetails = await contract.getProducerDetails(fullProductDetails[4]);
+                    }
+                }
+                
+                if (fullProductDetails && fullProductDetails[7]) { // qualityInspector
+                    if (await contract.isQualityInspectorRegistered(fullProductDetails[7])) {
+                        inspectorDetails = await contract.getQualityInspectorDetails(fullProductDetails[7]);
+                    }
+                }
+                
+                if (fullProductDetails && fullProductDetails[9]) { // distributor
+                    if (await contract.isDistributorRegistered(fullProductDetails[9])) {
+                        distributorDetails = await contract.getDistributorDetails(fullProductDetails[9]);
+                    }
+                }
+                
+                if (fullProductDetails && fullProductDetails[10]) { // retailer
+                    if (await contract.isRetailerRegistered(fullProductDetails[10])) {
+                        retailerDetails = await contract.getRetailerDetails(fullProductDetails[10]);
+                    }
+                }
+            } catch (error) {
+                console.log("Error getting role details:", error);
+            }
+            
+            // Use full addresses from fullProductDetails if available, otherwise use from product
+            const producerAddress = fullProductDetails && fullProductDetails[4] ? fullProductDetails[4] : (product.producer || 'N/A');
+            const inspectorAddress = fullProductDetails && fullProductDetails[7] ? fullProductDetails[7] : (product.qualityInspector || 'N/A');
+            const distributorAddress = fullProductDetails && fullProductDetails[9] ? fullProductDetails[9] : (product.distributor || 'N/A');
+            const retailerAddress = fullProductDetails && fullProductDetails[10] ? fullProductDetails[10] : (product.retailer || 'N/A');
+            const currentOwnerAddress = fullProductDetails && fullProductDetails[11] ? fullProductDetails[11] : (product.currentOwner || 'N/A');
             
             container.innerHTML = `
                 <div class="product-card">
@@ -1293,16 +1408,26 @@
                         <div>
                             <p><strong>Batch ID:</strong> ${product.batchId}</p>
                             <p><strong>Category:</strong> ${product.category}</p>
-                            <p><strong>Producer:</strong> ${product.producer.slice(0, 6)}...${product.producer.slice(-4)}</p>
+                            <p><strong>Producer:</strong> ${producerAddress}</p>
+                            ${producerDetails ? `<p><strong>Producer Details:</strong> ${producerDetails}</p>` : ''}
                         </div>
                         <div>
-                            <p><strong>Current Owner:</strong> ${product.currentOwner.slice(0, 6)}...${product.currentOwner.slice(-4)}</p>
+                            <p><strong>Current Owner:</strong> ${currentOwnerAddress}</p>
                             <p><strong>Quality Status:</strong> 
                                 <span class="status-badge ${product.qualityApproved ? 'status-approved' : 'status-pending'}">
                                     <i class="fas ${product.qualityApproved ? 'fa-check-circle' : 'fa-clock'}"></i>
                                     ${product.qualityApproved ? 'Approved' : 'Pending'}
                                 </span>
                             </p>
+                            ${inspectorAddress && inspectorAddress !== '0x0000000000000000000000000000000000000000' ? 
+                              `<p><strong>Inspector:</strong> ${inspectorAddress}</p>
+                               ${inspectorDetails ? `<p><strong>Inspector Details:</strong> ${inspectorDetails}</p>` : ''}` : ''}
+                            ${distributorAddress && distributorAddress !== '0x0000000000000000000000000000000000000000' ? 
+                              `<p><strong>Distributor:</strong> ${distributorAddress}</p>
+                               ${distributorDetails ? `<p><strong>Distributor Details:</strong> ${distributorDetails}</p>` : ''}` : ''}
+                            ${retailerAddress && retailerAddress !== '0x0000000000000000000000000000000000000000' ? 
+                              `<p><strong>Retailer:</strong> ${retailerAddress}</p>
+                               ${retailerDetails ? `<p><strong>Retailer Details:</strong> ${retailerDetails}</p>` : ''}` : ''}
                         </div>
                     </div>
                     ${timelineHTML ? `
@@ -1318,9 +1443,18 @@
         }
 
         // Helper to determine role for an address
-        function getRoleForAddress(address) {
-            // In a real implementation, you would check against the contract
-            // For now, we'll use a simplified approach
+        async function getRoleForAddress(address) {
+            if (!contract) return "Participant";
+            
+            try {
+                if (await contract.isProducerRegistered(address)) return "Producer";
+                if (await contract.isQualityInspectorRegistered(address)) return "Quality Inspector";
+                if (await contract.isDistributorRegistered(address)) return "Distributor";
+                if (await contract.isRetailerRegistered(address)) return "Retailer";
+            } catch (error) {
+                console.log("Error checking role:", error);
+            }
+            
             if (address === userAccount) return "You";
             return "Participant";
         }
@@ -1415,6 +1549,111 @@
             await searchProduct();
             // Switch to products tab
             switchTab('products');
+        }
+
+        // Search entity functions
+        async function searchProducer() {
+            if (!contract) {
+                showAlert('Please connect your wallet first!', 'error');
+                return;
+            }
+
+            const address = document.getElementById('searchProducerAddress').value;
+            if (!address) {
+                showAlert('Please enter a Producer address!', 'error');
+                return;
+            }
+
+            try {
+                const isRegistered = await contract.isProducerRegistered(address);
+                if (!isRegistered) {
+                    showAlert('Producer not registered!', 'error');
+                    return;
+                }
+                
+                const details = await contract.getProducerDetails(address);
+                showAlert(`Producer found: ${details}`, 'success');
+            } catch (error) {
+                showAlert('Error searching producer: ' + error.message, 'error');
+            }
+        }
+
+        async function searchInspector() {
+            if (!contract) {
+                showAlert('Please connect your wallet first!', 'error');
+                return;
+            }
+
+            const address = document.getElementById('searchInspectorAddress').value;
+            if (!address) {
+                showAlert('Please enter a Quality Inspector address!', 'error');
+                return;
+            }
+
+            try {
+                const isRegistered = await contract.isQualityInspectorRegistered(address);
+                if (!isRegistered) {
+                    showAlert('Quality Inspector not registered!', 'error');
+                    return;
+                }
+                
+                const details = await contract.getQualityInspectorDetails(address);
+                showAlert(`Quality Inspector found: ${details}`, 'success');
+            } catch (error) {
+                showAlert('Error searching inspector: ' + error.message, 'error');
+            }
+        }
+
+        async function searchDistributor() {
+            if (!contract) {
+                showAlert('Please connect your wallet first!', 'error');
+                return;
+            }
+
+            const address = document.getElementById('searchDistributorAddress').value;
+            if (!address) {
+                showAlert('Please enter a Distributor address!', 'error');
+                return;
+            }
+
+            try {
+                const isRegistered = await contract.isDistributorRegistered(address);
+                if (!isRegistered) {
+                    showAlert('Distributor not registered!', 'error');
+                    return;
+                }
+                
+                const details = await contract.getDistributorDetails(address);
+                showAlert(`Distributor found: ${details}`, 'success');
+            } catch (error) {
+                showAlert('Error searching distributor: ' + error.message, 'error');
+            }
+        }
+
+        async function searchRetailer() {
+            if (!contract) {
+                showAlert('Please connect your wallet first!', 'error');
+                return;
+            }
+
+            const address = document.getElementById('searchRetailerAddress').value;
+            if (!address) {
+                showAlert('Please enter a Retailer address!', 'error');
+                return;
+            }
+
+            try {
+                const isRegistered = await contract.isRetailerRegistered(address);
+                if (!isRegistered) {
+                    showAlert('Retailer not registered!', 'error');
+                    return;
+                }
+                
+                const details = await contract.getRetailerDetails(address);
+                showAlert(`Retailer found: ${details}`, 'success');
+            } catch (error) {
+                showAlert('Error searching retailer: ' + error.message, 'error');
+            }
         }
 
         // Quality control functions

@@ -293,6 +293,43 @@ contract SupplyChain {
         return (p.ownersHistory, p.transferTimestamps);
     }
 
+    /// @notice Get full product details including all entity addresses
+    function getFullProductDetails(uint256 productId)
+        external
+        view
+        returns (
+            uint256 id,
+            string memory name,
+            string memory batchId,
+            string memory category,
+            address producer,
+            uint256 productionDate,
+            uint256 expiryDate,
+            address qualityInspector,
+            bool qualityApproved,
+            address distributor,
+            address retailer,
+            address currentOwner
+        )
+    {
+        Product storage p = productById[productId];
+        require(p.productId != 0, "Product not found");
+        return (
+            p.productId,
+            p.name,
+            p.batchId,
+            p.category,
+            p.producer,
+            p.productionDate,
+            p.expiryDate,
+            p.qualityInspector,
+            p.qualityApproved,
+            p.distributor,
+            p.retailer,
+            p.currentOwner
+        );
+    }
+
     /// @notice Admin convenience: set expiry date or logistics info
     // function setExpiryAndLogistics(
     //     uint256 productId,
@@ -305,4 +342,33 @@ contract SupplyChain {
     //     p.expiryDate = expiryDate;
     //     p.logisticsInfo = logisticsInfo;
     // }
+    function getProducerDetails(address producer) external view returns (string memory) {
+        require(isProducerRegistered[producer], "Producer not registered");
+        return producerDetailsByAddress[producer];
+    }
+    function getQualityInspectorDetails(address inspector) external view returns (string memory) {
+        require(isQualityInspectorRegistered[inspector], "Inspector not registered");
+        return qualityInspectorDetailsByAddress[inspector];
+    }
+    function getDistributorDetails(address distributor) external view returns (string memory) {
+        require(isDistributorRegistered[distributor], "Distributor not registered");
+        return distributorDetailsByAddress[distributor];
+    }
+    function getRetailerDetails(address retailer) external view returns (string memory) {
+        require(isRetailerRegistered[retailer], "Retailer not registered");
+        return retailerDetailsByAddress[retailer];
+    }
+    function totalProducers() external view returns (uint256) {
+        return producersList.length;
+    }
+    function totalQualityInspectors() external view returns (uint256) {
+        return qualityInspectorsList.length;
+    }
+    function totalDistributors() external view returns (uint256) {
+        return distributorsList.length;
+    }
+    function totalRetailers() external view returns (uint256) {
+        return retailersList.length;
+    }
+    
 }
