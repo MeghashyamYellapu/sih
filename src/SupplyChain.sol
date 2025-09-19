@@ -2,11 +2,11 @@
 pragma solidity ^0.8.19;
 
 contract SupplyChain {
-    address public immutable i_owner;
+    address public immutable I_OWNER;
     uint256 public nextProductId = 1;
 
     constructor() {
-        i_owner = msg.sender;
+        I_OWNER = msg.sender;
     }
 
     /* =========================
@@ -52,7 +52,7 @@ contract SupplyChain {
         // Logistics & Consumer Facing
         string logisticsInfo;
         bool verified;
-        string metadataURI;
+        string metadataUri;
     }
 
     Product[] public products;
@@ -80,7 +80,7 @@ contract SupplyChain {
        Modifiers
        ========================= */
     modifier onlyOwner() {
-        require(msg.sender == i_owner, "Not owner");
+        require(msg.sender == I_OWNER, "Not owner");
         _;
     }
 
@@ -152,7 +152,7 @@ contract SupplyChain {
         string calldata _batchId,
         string calldata _category,
         uint256 _productionDate,
-        string calldata _metadataURI
+        string calldata _metadataUri
     ) external onlyProducer returns (uint256) {
         uint256 pid = nextProductId++;
         Product storage p = productById[pid];
@@ -175,7 +175,7 @@ contract SupplyChain {
 
         p.logisticsInfo = "";
         p.verified = false;
-        p.metadataURI = _metadataURI;
+        p.metadataUri = _metadataUri;
 
         // dynamic arrays start empty; push initial owner
         p.ownersHistory.push(msg.sender);
@@ -338,7 +338,7 @@ contract SupplyChain {
     // ) external {
     //     Product storage p = productById[productId];
     //     require(p.productId != 0, "Product not found");
-    //     require(p.producer == msg.sender || msg.sender == i_owner, "Only producer or owner");
+    //     require(p.producer == msg.sender || msg.sender == I_OWNER, "Only producer or owner");
     //     p.expiryDate = expiryDate;
     //     p.logisticsInfo = logisticsInfo;
     // }

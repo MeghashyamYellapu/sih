@@ -2,8 +2,8 @@
 pragma solidity ^0.8.0;
 
 import {SupplyChain} from "../src/SupplyChain.sol";
-import "forge-std/Script.sol";
-import "forge-std/console2.sol";
+import {Script} from "forge-std/Script.sol";
+import {console2} from "forge-std/console2.sol";
 
 contract DeploySupplyChain is Script {
     function run() external {

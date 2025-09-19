@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.19;
 
-import "forge-std/Test.sol";
-import "../src/SupplyChain.sol";
+import {Test} from "forge-std/Test.sol";
+import {console} from "forge-std/console.sol";
+import {SupplyChain} from "../src/SupplyChain.sol";
 
 contract SupplyChainTest is Test {
     SupplyChain supply;
@@ -104,5 +105,33 @@ contract SupplyChainTest is Test {
         emit SupplyChain.ProducerRegistered(address(0x9), "New Producer");
         supply.registerProducer(address(0x9), "New Producer");
         vm.stopPrank();
+    }
+
+    function testConsoleLogging() public {
+        console.log("=== Testing Console Logging ===");
+        
+        vm.startPrank(producer);
+        console.log("Current producer address:", producer);
+        
+        uint256 pid = supply.createProduct(
+            "Coffee",
+            "BATCH-123",
+            "Beverage",
+            block.timestamp,
+            "ipfs://coffee-metadata"
+        );
+        
+        console.log("Created product with ID:", pid);
+        console.log("Block timestamp:", block.timestamp);
+        
+        (uint256 id, string memory name, , , address prod, , bool approved) = supply.getBasicProductInfo(pid);
+        console.log("Product ID from contract:", id);
+        console.log("Product name:", name);
+        console.log("Producer address:", prod);
+        console.log("Is approved:", approved);
+        
+        vm.stopPrank();
+        
+        console.log("=== Test Complete ===");
     }
 }
