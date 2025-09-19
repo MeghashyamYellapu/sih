@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>SupplyChain | Decentralized Supply Chain Management</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/6.7.1/ethers.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jsqr/1.4.0/jsQR.min.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
         :root {
@@ -740,6 +741,32 @@
                         <button class="btn btn-secondary" onclick="loadAllProducts()">
                             <i class="fas fa-sync"></i> Load All
                         </button>
+                        <button class="btn btn-warning" onclick="toggleQRScanner()">
+                            <i class="fas fa-qrcode"></i> QR Scanner
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- QR Code Scanner -->
+                <div id="qrScannerContainer" style="display: none; margin-top: 20px;">
+                    <div class="card">
+                        <div class="card-header">
+                            <div class="card-icon">
+                                <i class="fas fa-camera"></i>
+                            </div>
+                            <h3 class="card-title">QR Code Scanner</h3>
+                            <button class="btn btn-secondary" onclick="stopQRScanner()" style="margin-left: auto;">
+                                <i class="fas fa-times"></i> Close
+                            </button>
+                        </div>
+                        <div style="text-align: center;">
+                            <video id="qrVideo" style="width: 100%; max-width: 400px; height: 300px; border-radius: 10px; background: #000;"></video>
+                            <canvas id="qrCanvas" style="display: none;"></canvas>
+                            <div id="qrResult" style="margin-top: 15px; font-weight: bold;"></div>
+                            <p style="color: rgba(255, 255, 255, 0.7); margin-top: 10px;">
+                                <i class="fas fa-info-circle"></i> Point your camera at a QR code containing a Product ID
+                            </p>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -1061,7 +1088,7 @@
 
     <script>
         // Contract configuration
-        const CONTRACT_ADDRESS = '0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512'; // Latest Anvil deployment
+        const CONTRACT_ADDRESS = '0x5FbDB2315678afecb367f032d93F642f64180aa3'; // Latest Anvil deployment
         const CONTRACT_ABI = [
             "function i_owner() view returns (address)",
             "function nextProductId() view returns (uint256)",
@@ -1995,6 +2022,220 @@
             } finally {
                 hideLoading(button, originalHTML);
             }
+        }
+
+        // QR Code Scanner Functions
+        let qrScanner = null;
+        let qrVideo = null;
+        let qrCanvas = null;
+        let qrContext = null;
+
+        async function toggleQRScanner() {
+            const container = document.getElementById('qrScannerContainer');
+            const video = document.getElementById('qrVideo');
+            const result = document.getElementById('qrResult');
+            
+            if (container.style.display === 'none') {
+                container.style.display = 'block';
+                result.innerHTML = '<span style="color: var(--warning)"><i class="fas fa-camera"></i> Starting camera...</span>';
+                await startQRScanner();
+            } else {
+                stopQRScanner();
+            }
+        }
+
+        async function startQRScanner() {
+            const video = document.getElementById('qrVideo');
+            const canvas = document.getElementById('qrCanvas');
+            const result = document.getElementById('qrResult');
+            
+            try {
+                // Request camera access
+                const stream = await navigator.mediaDevices.getUserMedia({ 
+                    video: { 
+                        facingMode: 'environment', // Use back camera if available
+                        width: { ideal: 640 },
+                        height: { ideal: 480 }
+                    } 
+                });
+                
+                video.srcObject = stream;
+                video.play();
+                
+                qrVideo = video;
+                qrCanvas = canvas;
+                qrContext = canvas.getContext('2d');
+                
+                result.innerHTML = '<span style="color: var(--success)"><i class="fas fa-camera"></i> Camera ready - scan QR code</span>';
+                
+                // Start scanning
+                qrScanner = setInterval(scanQRCode, 300);
+                
+            } catch (error) {
+                console.error('Error accessing camera:', error);
+                result.innerHTML = '<span style="color: var(--danger)"><i class="fas fa-exclamation-triangle"></i> Camera access denied or not available</span>';
+                
+                // Fallback: show file input for QR code image
+                showQRFileInput();
+            }
+        }
+
+        function scanQRCode() {
+            if (qrVideo && qrVideo.readyState === qrVideo.HAVE_ENOUGH_DATA) {
+                qrCanvas.width = qrVideo.videoWidth;
+                qrCanvas.height = qrVideo.videoHeight;
+                qrContext.drawImage(qrVideo, 0, 0, qrCanvas.width, qrCanvas.height);
+                
+                const imageData = qrContext.getImageData(0, 0, qrCanvas.width, qrCanvas.height);
+                const code = jsQR(imageData.data, imageData.width, imageData.height);
+                
+                if (code) {
+                    const qrData = code.data;
+                    document.getElementById('qrResult').innerHTML = 
+                        `<span style="color: var(--success)"><i class="fas fa-check-circle"></i> QR Code detected: ${qrData}</span>`;
+                    
+                    // Extract product ID from QR code data
+                    const productId = extractProductId(qrData);
+                    if (productId) {
+                        document.getElementById('searchProductId').value = productId;
+                        stopQRScanner();
+                        searchProduct();
+                        showAlert(`Product ID ${productId} scanned successfully!`, 'success');
+                    } else {
+                        document.getElementById('qrResult').innerHTML = 
+                            `<span style="color: var(--warning)"><i class="fas fa-exclamation-triangle"></i> QR Code found but no valid Product ID detected</span>`;
+                    }
+                }
+            }
+        }
+
+        function extractProductId(qrData) {
+            // Try to extract product ID from various QR code formats
+            
+            // Direct number
+            if (/^\d+$/.test(qrData)) {
+                return qrData;
+            }
+            
+            // JSON format: {"productId": 123}
+            try {
+                const parsed = JSON.parse(qrData);
+                if (parsed.productId) return parsed.productId.toString();
+                if (parsed.id) return parsed.id.toString();
+            } catch (e) {}
+            
+            // URL format: https://example.com/product/123 or /product/123
+            const urlMatch = qrData.match(/\/product\/(\d+)/i);
+            if (urlMatch) return urlMatch[1];
+            
+            // Key-value format: productId=123 or id=123
+            const kvMatch = qrData.match(/(?:productId|id)=(\d+)/i);
+            if (kvMatch) return kvMatch[1];
+            
+            // Supply chain format: SUPPLYCHAIN:123
+            const scMatch = qrData.match(/SUPPLYCHAIN:(\d+)/i);
+            if (scMatch) return scMatch[1];
+            
+            return null;
+        }
+
+        function stopQRScanner() {
+            const container = document.getElementById('qrScannerContainer');
+            const video = document.getElementById('qrVideo');
+            const result = document.getElementById('qrResult');
+            
+            if (qrScanner) {
+                clearInterval(qrScanner);
+                qrScanner = null;
+            }
+            
+            if (video.srcObject) {
+                const tracks = video.srcObject.getTracks();
+                tracks.forEach(track => track.stop());
+                video.srcObject = null;
+            }
+            
+            container.style.display = 'none';
+            result.innerHTML = '';
+            
+            // Remove file input if it exists
+            const fileInput = document.getElementById('qrFileInput');
+            if (fileInput) {
+                fileInput.remove();
+            }
+        }
+
+        function showQRFileInput() {
+            const container = document.getElementById('qrScannerContainer');
+            const existingInput = document.getElementById('qrFileInput');
+            
+            if (!existingInput) {
+                const fileInputHTML = `
+                    <div id="qrFileInput" style="margin-top: 20px; text-align: center;">
+                        <p style="color: var(--warning); margin-bottom: 15px;">
+                            <i class="fas fa-camera-retro"></i> Camera not available. Upload QR code image instead:
+                        </p>
+                        <input type="file" id="qrFileUpload" accept="image/*" style="display: none;" onchange="handleQRFile(event)">
+                        <button class="btn" onclick="document.getElementById('qrFileUpload').click()">
+                            <i class="fas fa-upload"></i> Upload QR Code Image
+                        </button>
+                    </div>
+                `;
+                container.innerHTML += fileInputHTML;
+            }
+        }
+
+        async function handleQRFile(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            
+            const result = document.getElementById('qrResult');
+            result.innerHTML = '<span style="color: var(--warning)"><i class="fas fa-spinner fa-spin"></i> Processing image...</span>';
+            
+            try {
+                const imageData = await readQRFromFile(file);
+                const code = jsQR(imageData.data, imageData.width, imageData.height);
+                
+                if (code) {
+                    const qrData = code.data;
+                    result.innerHTML = `<span style="color: var(--success)"><i class="fas fa-check-circle"></i> QR Code detected: ${qrData}</span>`;
+                    
+                    const productId = extractProductId(qrData);
+                    if (productId) {
+                        document.getElementById('searchProductId').value = productId;
+                        stopQRScanner();
+                        searchProduct();
+                        showAlert(`Product ID ${productId} scanned from image!`, 'success');
+                    } else {
+                        result.innerHTML = '<span style="color: var(--warning)"><i class="fas fa-exclamation-triangle"></i> QR Code found but no valid Product ID detected</span>';
+                    }
+                } else {
+                    result.innerHTML = '<span style="color: var(--danger)"><i class="fas fa-times-circle"></i> No QR code found in image</span>';
+                }
+            } catch (error) {
+                result.innerHTML = '<span style="color: var(--danger)"><i class="fas fa-exclamation-triangle"></i> Error processing image</span>';
+                console.error('QR file processing error:', error);
+            }
+        }
+
+        function readQRFromFile(file) {
+            return new Promise((resolve, reject) => {
+                const img = new Image();
+                const canvas = document.createElement('canvas');
+                const ctx = canvas.getContext('2d');
+                
+                img.onload = function() {
+                    canvas.width = img.width;
+                    canvas.height = img.height;
+                    ctx.drawImage(img, 0, 0);
+                    
+                    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                    resolve(imageData);
+                };
+                
+                img.onerror = reject;
+                img.src = URL.createObjectURL(file);
+            });
         }
 
         // Event listeners
