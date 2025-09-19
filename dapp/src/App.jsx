@@ -3,6 +3,9 @@ import React, { useEffect, useState, useRef } from "react";
 import { ethers } from "ethers";
 import CONTRACT_ABI from "./abi/SupplyChain.json";
 import "./App.css";
+import { Routes, Route, Link } from 'react-router-dom';
+import Login from './Components/Login';
+import Register from './Components/Register';
 
 const CONTRACT_ADDRESS = import.meta.env.VITE_CONTRACT_ADDRESS || "0x5FbDB2315678afecb367f032d93F642f64180aa3";
 const RPC_URL = import.meta.env.VITE_RPC_URL || "http://127.0.0.1:8545";
@@ -413,36 +416,18 @@ export default function App() {
   }
 
   // --- Beautiful UI layout ---
-  return (
+  const MainUI = () => (
     <div className="container">
-      <header className="header">
+      <header className="header" style={{ position: 'relative' }}>
         <h1>SupplyChain DApp</h1>
         <p>Decentralized Supply Chain Management System</p>
+        <div style={{ position: 'absolute', top: 18, right: 24, display: 'flex', gap: 10 }}>
+          <Link to="/register" className="btn">Register</Link>
+          <Link to="/login" className="btn">Login</Link>
+        </div>
       </header>
 
-      <div className="wallet-section">
-        <div className="wallet-info">
-          <div className="wallet-icon">🔗</div>
-          <div>
-            {account ? (
-              <div>
-                <div><strong>Connected: {account.slice(0,6)}...{account.slice(-4)}</strong></div>
-                <div style={{ fontSize: '0.9rem', opacity: 0.7 }}>Wallet Connected</div>
-              </div>
-            ) : (
-              <div>
-                <div><strong>Wallet Status</strong></div>
-                <div style={{ fontSize: '0.9rem', opacity: 0.7 }}>Not Connected</div>
-              </div>
-            )}
-          </div>
-        </div>
-        {!account && (
-          <button className="connect-btn" onClick={connectWallet}>
-            Connect Wallet
-          </button>
-        )}
-      </div>
+
 
       {txStatus && (
         <div className={`alert ${txStatus.includes('Error') || txStatus.includes('Failed') ? 'alert-error' : 'alert-success'}`}>
@@ -672,5 +657,13 @@ export default function App() {
         }}></div>
       </div>
     </div>
+  );
+
+  return (
+    <Routes>
+      <Route path="/" element={<MainUI />} />
+      <Route path="/login" element={<Login onChange={({userName, account, role})=>console.log('Login data', userName, account, role)} />} />
+      <Route path="/register" element={<Register onChange={({userName, account, role})=>console.log('Register data', userName, account, role)} />} />
+    </Routes>
   );
 }
